@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Attendance Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .input-section {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+    .input-section input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    .input-section button {
+      padding: 10px 20px;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    .input-section button:hover {
+      background-color: #388e3c;
+    }
+    .chart-container {
+      width: 100%;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .chart-box {
+      width: 48%;
+      background-color: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    #progressContainer {
+      width: 100%;
+      margin: 20px auto;
+      background-color: #f0f0f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #progressBar {
+      height: 30px;
+      width: 0%;
+      background-color: #4caf50;
+      text-align: center;
+      line-height: 30px;
+      color: white;
+      border-radius: 10px;
+      transition: width 0.5s ease-in-out;
+    }
+    .summary {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    .attendance-pill {
+      display: inline-block;
+      padding: 8px 15px;
+      border-radius: 20px;
+      margin: 5px;
+      font-weight: bold;
+      color: white;
+    }
+    .loader {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #4caf50;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+    .attendance-status {
+      font-weight: bold;
+      font-size: 1.2em;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 15px;
+      text-align: center;
+    }
+    .status-good {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    .status-warning {
+      background-color: #fff8e1;
+      color: #ff8f00;
+    }
+    .status-danger {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @media (max-width: 768px) {
+      .chart-box {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Student Attendance Dashboard</h1>
+      <p>Enter a roll number to view detailed attendance analysis</p>
+    </div>
+    
+    <div class="input-section">
+      <input type="number" id="roll" min="1" placeholder="Enter Roll Number">
+      <button onclick="fetchAttendance()">Get Attendance</button>
+    </div>
+    
+    <div id="loader" class="loader"></div>
+    
+    <div id="results" style="display: none;">
+      <div id="progressContainer">
+        <div id="progressBar">0%</div>
+      </div>
+      
+      <div class="chart-container">
+        <div class="chart-box">
+          <canvas id="barChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+      
+      <div class="chart-container">
+        <div class="chart-box">
+          <canvas id="polarChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <canvas id="doughnutChart"></canvas>
+        </div>
+      </div>
+      
+      <div class="summary" id="summary">
+        <h3>Attendance Summary</h3>
+        <div id="attendancePills"></div>
+        <p id="averageAttendance"></p>
+        <p id="highestAttendance"></p>
+        <p id="lowestAttendance"></p>
+        <div id="attendanceStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let barChart, radarChart, polarChart, doughnutChart;
+    
+    function fetchAttendance() {
+      const rollNumber = document.getElementById("roll").value;
+      if (!rollNumber) {
+        alert("Please enter a roll number");
+        return;
+      }
+      
+      // Show loader
+      document.getElementById("loader").style.display = "block";
+      document.getElementById("results").style.display = "none";
+      
+    
+      
+      // Uncomment this for actual API usage
+      /*
+      */
+      const url = "https://script.google.com/macros/s/AKfycbxCtcHvxpj_uQTDhwwAsE5ItuVqArRerEemFQXWmH1fOJkXkOiffRTHFBf9ZA9TS7QW/exec?mode=fetch&class_code=CSC&subject_name=M3&roll=" + encodeURIComponent(rollNumber);
+      
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          processData(data);
+          document.getElementById("loader").style.display = "none";
+          document.getElementById("results").style.display = "block";
+        })
+        .catch(error => {
+          console.error("Error fetching data:", error);
+          alert("Error fetching data. Please try again.");
+          document.getElementById("loader").style.display = "none";
+        });
+    }
+    
+    function processData(data) {
+      // Filter out the TOTAL entry for charts
+      const subjectEntries = data.scores.filter(item => item.subject !== "TOTAL");
+      const totalEntry = data.scores.find(item => item.subject === "TOTAL");
+      
+      // Get total attendance percentage
+      const totalAttendance = totalEntry ? totalEntry.attendance : 0;
+      
+      // Update progress bar with the total attendance
+      document.getElementById("progressBar").style.width = totalAttendance.toFixed(1) + "%";
+      document.getElementById("progressBar").innerText = totalAttendance.toFixed(1) + "%";
+      
+      // Prepare data for charts
+      const subjects = subjectEntries.map(item => item.subject);
+      const attendanceValues = subjectEntries.map(item => item.attendance);
+      
+      // Generate random colors for charts
+      const colors = generateColors(subjectEntries.length);
+      
+      // Create charts
+      createBarChart(subjects, attendanceValues, colors);
+      createRadarChart(subjects, attendanceValues);
+      createPolarChart(subjects, attendanceValues, colors);
+      createDoughnutChart(subjects, attendanceValues, colors);
+      
+      // Update summary section
+      updateSummary(subjectEntries, totalAttendance);
+    }
+    
+    function createBarChart(labels, data, colors) {
+      const ctx = document.getElementById('barChart').getContext('2d');
+      
+      if (barChart) {
+        barChart.destroy();
+      }
+      
+      barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Attendance',
+            data: data,
+            backgroundColor: colors,
+            borderColor: colors.map(color => color.replace('0.7', '1')),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Subject Attendance'
+            },
+            legend: {
+              display: false
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              ticks: {
+                callback: function(value) {
+                  return value + '%';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function createRadarChart(labels, data) {
+      const ctx = document.getElementById('radarChart').getContext('2d');
+      
+      if (radarChart) {
+        radarChart.destroy();
+      }
+      
+      radarChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Attendance',
+            data: data,
+            backgroundColor: 'rgba(76, 175, 80, 0.2)',
+            borderColor: 'rgba(76, 175, 80, 1)',
+            pointBackgroundColor: 'rgba(76, 175, 80, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(76, 175, 80, 1)'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Attendance Profile'
+            }
+          },
+          scales: {
+            r: {
+              angleLines: {
+                display: true
+              },
+              suggestedMin: 0,
+              suggestedMax: 100
+            }
+          }
+        }
+      });
+    }
+    
+    function createPolarChart(labels, data, colors) {
+      const ctx = document.getElementById('polarChart').getContext('2d');
+      
+      if (polarChart) {
+        polarChart.destroy();
+      }
+      
+      polarChart = new Chart(ctx, {
+        type: 'polarArea',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Attendance Distribution'
+            }
+          },
+          scales: {
+            r: {
+              ticks: {
+                backdropColor: 'rgba(0, 0, 0, 0)'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function createDoughnutChart(labels, data, colors) {
+      const ctx = document.getElementById('doughnutChart').getContext('2d');
+      
+      if (doughnutChart) {
+        doughnutChart.destroy();
+      }
+      
+      doughnutChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors,
+            borderColor: 'white',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Subject Comparison'
+            }
+          }
+        }
+      });
+    }
+    
+    function updateSummary(subjects, totalAttendance) {
+      // Find highest and lowest attendance
+      const highest = subjects.reduce((max, item) => item.attendance > max.attendance ? item : max, subjects[0]);
+      const lowest = subjects.reduce((min, item) => item.attendance < min.attendance ? item : min, subjects[0]);
+      
+      // Update summary text
+      document.getElementById('averageAttendance').textContent = `Overall Attendance: ${totalAttendance.toFixed(1)}%`;
+      document.getElementById('highestAttendance').textContent = `Highest Attendance: ${highest.subject} (${highest.attendance.toFixed(1)}%)`;
+      document.getElementById('lowestAttendance').textContent = `Lowest Attendance: ${lowest.subject} (${lowest.attendance.toFixed(1)}%)`;
+      
+      // Create attendance pills
+      const pillsContainer = document.getElementById('attendancePills');
+      pillsContainer.innerHTML = '';
+      
+      subjects.forEach(item => {
+        const pill = document.createElement('div');
+        pill.className = 'attendance-pill';
+        pill.textContent = `${item.subject}: ${item.attendance.toFixed(1)}%`;
+        
+        // Color based on attendance
+        if (item.attendance >= 75) {
+          pill.style.backgroundColor = '#4caf50'; // Green for good
+        } else if (item.attendance >= 60) {
+          pill.style.backgroundColor = '#ffeb3b'; // Yellow for warning
+          pill.style.color = '#333'; // Darker text for visibility
+        } else {
+          pill.style.backgroundColor = '#f44336'; // Red for danger
+        }
+        
+        pillsContainer.appendChild(pill);
+      });
+      
+      // Add attendance status message
+      const statusDiv = document.getElementById('attendanceStatus');
+      if (totalAttendance >= 75) {
+        statusDiv.className = 'attendance-status status-good';
+        statusDiv.textContent = 'Your attendance is good! Keep it up.';
+      } else if (totalAttendance >= 60) {
+        statusDiv.className = 'attendance-status status-warning';
+        statusDiv.textContent = 'Your attendance needs improvement. Try to attend more classes.';
+      } else {
+        statusDiv.className = 'attendance-status status-danger';
+        statusDiv.textContent = 'Warning: Your attendance is critically low. You may not be eligible for exams.';
+      }
+    }
+    
+    function generateColors(count) {
+      const baseColors = [
+        'rgba(76, 175, 80, 0.7)',    // Green
+        'rgba(33, 150, 243, 0.7)',   // Blue
+        'rgba(255, 152, 0, 0.7)',    // Orange
+        'rgba(156, 39, 176, 0.7)',   // Purple
+        'rgba(233, 30, 99, 0.7)',    // Pink
+        'rgba(3, 169, 244, 0.7)'     // Light Blue
+      ];
+      
+      // If we need more colors than in our base set, repeat them
+      const colors = [];
+      for (let i = 0; i < count; i++) {
+        colors.push(baseColors[i % baseColors.length]);
+      }
+      
+      return colors;
+    }
+  </script>
+</body>
+</html>

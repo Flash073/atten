@@ -19,7 +19,6 @@
       border-radius: 10px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
       padding: 20px;
-      overflow-x: hidden;
     }
     .header {
       text-align: center;
@@ -38,7 +37,6 @@
       border: 1px solid #ddd;
       border-radius: 5px;
       font-size: 16px;
-      max-width: 100%;
     }
     .input-section button {
       padding: 10px 20px;
@@ -57,19 +55,16 @@
       width: 100%;
       margin-bottom: 30px;
       display: flex;
-      justify-content: center;
+      justify-content: space-between;
       flex-wrap: wrap;
-      gap: 20px;
     }
     .chart-box {
-      width: 100%;
-      max-width: 400px;
+      width: 48%;
       background-color: white;
       border-radius: 8px;
       padding: 15px;
       margin-bottom: 20px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      overflow: hidden;
     }
     #progressContainer {
       width: 100%;
@@ -93,7 +88,6 @@
       padding: 15px;
       border-radius: 8px;
       margin-top: 20px;
-      overflow-x: auto;
     }
     .attendance-pill {
       display: inline-block;
@@ -133,11 +127,28 @@
       background-color: #ffebee;
       color: #c62828;
     }
-    #attendancePills {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 5px;
+    .calendar {
+      margin-top: 30px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .calendar th, .calendar td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    .calendar th {
+      background-color: #f2f2f2;
+    }
+    .present {
+      background-color: #e8f5e9;
+    }
+    .absent {
+      background-color: #ffebee;
+    }
+    .date-header {
+      font-weight: bold;
+      margin-bottom: 5px;
     }
     @keyframes spin {
       0% { transform: rotate(0deg); }
@@ -145,17 +156,6 @@
     }
     @media (max-width: 768px) {
       .chart-box {
-        width: 100%;
-        max-width: 100%;
-      }
-      .container {
-        padding: 15px;
-      }
-      .input-section {
-        flex-direction: column;
-        align-items: center;
-      }
-      .input-section input {
         width: 100%;
       }
     }
@@ -198,19 +198,33 @@
         </div>
       </div>
       
+      <div class="chart-container">
+        <div class="chart-box">
+          <canvas id="timelineChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <canvas id="weekdayChart"></canvas>
+        </div>
+      </div>
+      
       <div class="summary" id="summary">
-        <h3 style="text-align: center;">Attendance Summary</h3>
+        <h3>Attendance Summary</h3>
         <div id="attendancePills"></div>
-        <p id="averageAttendance" style="text-align: center;"></p>
-        <p id="highestAttendance" style="text-align: center;"></p>
-        <p id="lowestAttendance" style="text-align: center;"></p>
+        <p id="averageAttendance"></p>
+        <p id="highestAttendance"></p>
+        <p id="lowestAttendance"></p>
         <div id="attendanceStatus"></div>
+      </div>
+      
+      <div class="summary" id="calendarView">
+        <h3>Attendance Calendar</h3>
+        <div id="attendanceCalendar"></div>
       </div>
     </div>
   </div>
 
   <script>
-    let barChart, radarChart, polarChart, doughnutChart;
+    let barChart, radarChart, polarChart, doughnutChart, timelineChart, weekdayChart;
     
     function fetchAttendance() {
       const rollNumber = document.getElementById("roll").value;
@@ -226,8 +240,8 @@
       // Uncomment this for actual API usage
       /*
       */
-      const url = "https://script.google.com/macros/s/AKfycbxCtcHvxpj_uQTDhwwAsE5ItuVqArRerEemFQXWmH1fOJkXkOiffRTHFBf9ZA9TS7QW/exec?mode=fetch&class_code=CSC&subject_name=M3&roll=" + encodeURIComponent(rollNumber);
-      
+      const url = "https://script.google.com/macros/s/AKfycbxCtcHvxpj_uQTDhwwAsE5ItuVqArRerEemFQXWmH1fOJkXkOiffRTHFBf9ZA9TS7QW/exec?mode=fetch&class_code=CSC&subject_name=M3&start_roll=149&roll=" + encodeURIComponent(rollNumber);
+
       fetch(url)
         .then(response => response.json())
         .then(data => {
@@ -243,32 +257,61 @@
     }
     
     function processData(data) {
-      // Filter out the TOTAL entry for charts
-      const subjectEntries = data.scores.filter(item => item.subject !== "TOTAL");
-      const totalEntry = data.scores.find(item => item.subject === "TOTAL");
+      // Transform the data structure
+      const subjects = data.attendance_data.filter(item => item.subject !== "MAIN");
       
-      // Get total attendance percentage
-      const totalAttendance = totalEntry ? totalEntry.attendance : 0;
+      // Calculate attendance percentages from raw attendance data
+      subjects.forEach(subject => {
+        const totalClasses = subject.attendance.length;
+        if (totalClasses === 0) {
+          subject.attendancePercentage = 0;
+        } else {
+          const presentCount = subject.attendance.filter(record => record.status === "P").length;
+          subject.attendancePercentage = (presentCount / totalClasses) * 100;
+        }
+      });
+      
+      // For the main entry, find it in the scores array
+      const mainScore = data.scores.find(item => item.subject === "MAIN");
+      const totalAttendance = mainScore ? mainScore.score : calculateAverageAttendance(subjects);
       
       // Update progress bar with the total attendance
       document.getElementById("progressBar").style.width = totalAttendance.toFixed(1) + "%";
       document.getElementById("progressBar").innerText = totalAttendance.toFixed(1) + "%";
       
       // Prepare data for charts
-      const subjects = subjectEntries.map(item => item.subject);
-      const attendanceValues = subjectEntries.map(item => item.attendance);
+      const subjectNames = subjects.map(item => item.subject);
+      const attendanceValues = subjects.map(item => item.attendancePercentage);
       
       // Generate random colors for charts
-      const colors = generateColors(subjectEntries.length);
+      const colors = generateColors(subjects.length);
       
       // Create charts
-      createBarChart(subjects, attendanceValues, colors);
-      createRadarChart(subjects, attendanceValues);
-      createPolarChart(subjects, attendanceValues, colors);
-      createDoughnutChart(subjects, attendanceValues, colors);
+      createBarChart(subjectNames, attendanceValues, colors);
+      createRadarChart(subjectNames, attendanceValues);
+      createPolarChart(subjectNames, attendanceValues, colors);
+      createDoughnutChart(subjectNames, attendanceValues, colors);
+      createTimelineChart(subjects);
+      createWeekdayAttendanceChart(subjects);
       
       // Update summary section
-      updateSummary(subjectEntries, totalAttendance);
+      updateSummary(subjects, totalAttendance);
+      
+      // Create calendar view
+      createCalendarView(subjects);
+    }
+    
+    function calculateAverageAttendance(subjects) {
+      const totalPresent = subjects.reduce((sum, subject) => {
+        return sum + subject.attendance.filter(record => record.status === "P").length;
+      }, 0);
+      
+      const totalClasses = subjects.reduce((sum, subject) => {
+        return sum + subject.attendance.length;
+      }, 0);
+      
+      if (totalClasses === 0) return 0;
+      return (totalPresent / totalClasses) * 100;
     }
     
     function createBarChart(labels, data, colors) {
@@ -283,7 +326,7 @@
         data: {
           labels: labels,
           datasets: [{
-            label: 'Attendance',
+            label: 'Attendance %',
             data: data,
             backgroundColor: colors,
             borderColor: colors.map(color => color.replace('0.7', '1')),
@@ -292,7 +335,6 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: true,
           plugins: {
             title: {
               display: true,
@@ -310,12 +352,6 @@
                 callback: function(value) {
                   return value + '%';
                 }
-              }
-            },
-            x: {
-              ticks: {
-                maxRotation: 45,
-                minRotation: 45
               }
             }
           }
@@ -335,7 +371,7 @@
         data: {
           labels: labels,
           datasets: [{
-            label: 'Attendance',
+            label: 'Attendance %',
             data: data,
             backgroundColor: 'rgba(76, 175, 80, 0.2)',
             borderColor: 'rgba(76, 175, 80, 1)',
@@ -347,7 +383,6 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: true,
           plugins: {
             title: {
               display: true,
@@ -385,7 +420,6 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: true,
           plugins: {
             title: {
               display: true,
@@ -423,7 +457,6 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: true,
           plugins: {
             title: {
               display: true,
@@ -434,15 +467,189 @@
       });
     }
     
+    function createTimelineChart(subjects) {
+      // Collect all unique dates across all subjects
+      const allDates = new Set();
+      subjects.forEach(subject => {
+        subject.attendance.forEach(record => {
+          allDates.add(new Date(record.date).toISOString().split('T')[0]);
+        });
+      });
+      
+      // Sort dates
+      const sortedDates = Array.from(allDates).sort();
+      
+      // Format dates for display
+      const formattedDates = sortedDates.map(date => {
+        const d = new Date(date);
+        return `${d.getDate()}/${d.getMonth() + 1}`;
+      });
+      
+      // Count present and absent across all subjects for each date
+      const presentByDate = {};
+      const absentByDate = {};
+      
+      sortedDates.forEach(date => {
+        presentByDate[date] = 0;
+        absentByDate[date] = 0;
+      });
+      
+      subjects.forEach(subject => {
+        subject.attendance.forEach(record => {
+          const dateKey = new Date(record.date).toISOString().split('T')[0];
+          if (record.status === "P") {
+            presentByDate[dateKey]++;
+          } else {
+            absentByDate[dateKey]++;
+          }
+        });
+      });
+      
+      const presentCounts = sortedDates.map(date => presentByDate[date]);
+      const absentCounts = sortedDates.map(date => absentByDate[date]);
+      
+      const ctx = document.getElementById('timelineChart').getContext('2d');
+      
+      if (timelineChart) {
+        timelineChart.destroy();
+      }
+      
+      timelineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: formattedDates,
+          datasets: [
+            {
+              label: 'Present',
+              data: presentCounts,
+              backgroundColor: 'rgba(76, 175, 80, 0.2)',
+              borderColor: 'rgba(76, 175, 80, 1)',
+              tension: 0.3,
+              pointRadius: 5
+            },
+            {
+              label: 'Absent',
+              data: absentCounts,
+              backgroundColor: 'rgba(244, 67, 54, 0.2)',
+              borderColor: 'rgba(244, 67, 54, 1)',
+              tension: 0.3,
+              pointRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Attendance Timeline'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Number of Classes'
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: 'Date (Day/Month)'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function createWeekdayAttendanceChart(subjects) {
+      // Initialize counters for each weekday
+      const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const presentByDay = [0, 0, 0, 0, 0, 0, 0];
+      const absentByDay = [0, 0, 0, 0, 0, 0, 0];
+      
+      // Count attendances by weekday
+      subjects.forEach(subject => {
+        subject.attendance.forEach(record => {
+          const date = new Date(record.date);
+          const dayIndex = date.getDay();
+          
+          if (record.status === "P") {
+            presentByDay[dayIndex]++;
+          } else {
+            absentByDay[dayIndex]++;
+          }
+        });
+      });
+      
+      // Calculate attendance percentage for each day
+      const attendancePercentage = weekdays.map((day, index) => {
+        const total = presentByDay[index] + absentByDay[index];
+        return total === 0 ? 0 : (presentByDay[index] / total) * 100;
+      });
+      
+      const ctx = document.getElementById('weekdayChart').getContext('2d');
+      
+      if (weekdayChart) {
+        weekdayChart.destroy();
+      }
+      
+      weekdayChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: weekdays,
+          datasets: [{
+            label: 'Attendance %',
+            data: attendancePercentage,
+            backgroundColor: 'rgba(33, 150, 243, 0.7)',
+            borderColor: 'rgba(33, 150, 243, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Attendance by Weekday'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              ticks: {
+                callback: function(value) {
+                  return value + '%';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    
     function updateSummary(subjects, totalAttendance) {
       // Find highest and lowest attendance
-      const highest = subjects.reduce((max, item) => item.attendance > max.attendance ? item : max, subjects[0]);
-      const lowest = subjects.reduce((min, item) => item.attendance < min.attendance ? item : min, subjects[0]);
+      const subjectsWithAttendance = subjects.filter(subject => subject.attendance.length > 0);
+      
+      if (subjectsWithAttendance.length === 0) {
+        document.getElementById('averageAttendance').textContent = "No attendance data available";
+        return;
+      }
+      
+      const highest = subjectsWithAttendance.reduce((max, item) => 
+        item.attendancePercentage > max.attendancePercentage ? item : max, subjectsWithAttendance[0]);
+      
+      const lowest = subjectsWithAttendance.reduce((min, item) => 
+        item.attendancePercentage < min.attendancePercentage ? item : min, subjectsWithAttendance[0]);
       
       // Update summary text
       document.getElementById('averageAttendance').textContent = `Overall Attendance: ${totalAttendance.toFixed(1)}%`;
-      document.getElementById('highestAttendance').textContent = `Highest Attendance: ${highest.subject} (${highest.attendance.toFixed(1)}%)`;
-      document.getElementById('lowestAttendance').textContent = `Lowest Attendance: ${lowest.subject} (${lowest.attendance.toFixed(1)}%)`;
+      document.getElementById('highestAttendance').textContent = `Highest Attendance: ${highest.subject} (${highest.attendancePercentage.toFixed(1)}%)`;
+      document.getElementById('lowestAttendance').textContent = `Lowest Attendance: ${lowest.subject} (${lowest.attendancePercentage.toFixed(1)}%)`;
       
       // Create attendance pills
       const pillsContainer = document.getElementById('attendancePills');
@@ -451,12 +658,12 @@
       subjects.forEach(item => {
         const pill = document.createElement('div');
         pill.className = 'attendance-pill';
-        pill.textContent = `${item.subject}: ${item.attendance.toFixed(1)}%`;
+        pill.textContent = `${item.subject}: ${item.attendancePercentage.toFixed(1)}%`;
         
         // Color based on attendance
-        if (item.attendance >= 75) {
+        if (item.attendancePercentage >= 75) {
           pill.style.backgroundColor = '#4caf50'; // Green for good
-        } else if (item.attendance >= 60) {
+        } else if (item.attendancePercentage >= 60) {
           pill.style.backgroundColor = '#ffeb3b'; // Yellow for warning
           pill.style.color = '#333'; // Darker text for visibility
         } else {
@@ -478,6 +685,65 @@
         statusDiv.className = 'attendance-status status-danger';
         statusDiv.textContent = 'Warning: Your attendance is critically low. You may not be eligible for exams.';
       }
+    }
+    
+    function createCalendarView(subjects) {
+      const calendarDiv = document.getElementById('attendanceCalendar');
+      calendarDiv.innerHTML = '';
+      
+      // Create a table for each subject
+      subjects.forEach(subject => {
+        if (subject.attendance.length === 0) return;
+        
+        const subjectHeader = document.createElement('h4');
+        subjectHeader.textContent = subject.subject;
+        calendarDiv.appendChild(subjectHeader);
+        
+        const table = document.createElement('table');
+        table.className = 'calendar';
+        
+        // Create header row
+        const headerRow = document.createElement('tr');
+        const headers = ['Date', 'Day', 'Status'];
+        headers.forEach(header => {
+          const th = document.createElement('th');
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+        table.appendChild(headerRow);
+        
+        // Sort attendance records by date
+        const sortedAttendance = [...subject.attendance].sort((a, b) => 
+          new Date(a.date) - new Date(b.date)
+        );
+        
+        // Create a row for each attendance record
+        sortedAttendance.forEach(record => {
+          const date = new Date(record.date);
+          const row = document.createElement('tr');
+          
+          // Date cell
+          const dateCell = document.createElement('td');
+          dateCell.textContent = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+          row.appendChild(dateCell);
+          
+          // Day cell
+          const dayCell = document.createElement('td');
+          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          dayCell.textContent = days[date.getDay()];
+          row.appendChild(dayCell);
+          
+          // Status cell
+          const statusCell = document.createElement('td');
+          statusCell.textContent = record.status === 'P' ? 'Present' : 'Absent';
+          statusCell.className = record.status === 'P' ? 'present' : 'absent';
+          row.appendChild(statusCell);
+          
+          table.appendChild(row);
+        });
+        
+        calendarDiv.appendChild(table);
+      });
     }
     
     function generateColors(count) {

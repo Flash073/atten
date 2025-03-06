@@ -163,6 +163,21 @@
         width: 100%;
       }
     }
+    .user-info {
+      text-align: center;
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #f0f7ff;
+      border-radius: 8px;
+      border-left: 5px solid #4caf50;
+    }
+
+    .user-name {
+      font-size: 1.3em;
+      font-weight: bold;
+      color: #333;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -237,14 +252,10 @@
         return;
       }
       
-      // Show loader
       document.getElementById("loader").style.display = "block";
       document.getElementById("results").style.display = "none";
     
-      // Uncomment this for actual API usage
-      /*
-      */
-      const url = "https://script.google.com/macros/s/AKfycbxCtcHvxpj_uQTDhwwAsE5ItuVqArRerEemFQXWmH1fOJkXkOiffRTHFBf9ZA9TS7QW/exec?mode=fetch&class_code=CSC&subject_name=M3&start_roll=149&roll=" + encodeURIComponent(rollNumber);
+      const url = "https://script.google.com/macros/s/AKfycbxCtcHvxpj_uQTDhwwAsE5ItuVqArRerEemFQXWmH1fOJkXkOiffRTHFBf9ZA9TS7QW/exec?mode=fetch&class_code=CSA&start_roll=1&roll=" + encodeURIComponent(rollNumber);
 
       fetch(url)
         .then(response => response.json())
@@ -261,6 +272,26 @@
     }
     
     function processData(data) {
+
+      const existingUserInfo = document.querySelector('.user-info');
+      if (existingUserInfo) {
+        existingUserInfo.remove();
+      }
+
+      // Display user name
+      const userInfoDiv = document.createElement('div');
+      userInfoDiv.className = 'user-info';
+      
+      const userName = document.createElement('p');
+      userName.className = 'user-name';
+      userName.textContent = data.name || "Student";
+      
+      userInfoDiv.appendChild(userName);
+      
+      // Insert user info at the top of results
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.insertBefore(userInfoDiv, resultsDiv.firstChild);
+
       // Transform the data structure
       const subjects = data.attendance_data.filter(item => item.subject !== "MAIN");
       
